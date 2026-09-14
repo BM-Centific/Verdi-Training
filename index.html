@@ -2281,6 +2281,7 @@ async function doLogin(){
 function applyProfile(rec){
   ME.email=rec.email; ME.name=rec.name||rec.email; ME.locale=rec.locale||''; ME.tz=rec.tz||'';
   ME.projects=rec.projects||[];
+  ME.role=rec.role||'moderator'; // GROKBOT FIX: role was never copied to ME, so ME.role was undefined — this locked admins out of the Issues/Email Log tabs, hid admin controls in the issue detail modal, and hid moderators' "My Reported Issues" list. Role-gated views all read ME.role.
   const p=progressFor(rec.email);
   ME.done=p.doneIds;
 }
@@ -2629,7 +2630,9 @@ function pickAnswer(mid,qi,oi){
   persistLocal();
   renderView();
   const btn=document.getElementById('continueBtn');
-  if(btn && m && m.quiz.every((q,i)=>MOD_QZ.answers[i]!==undefined)){ btn.disabled=false; btn.onclick=()=>completeModule(mid, resolveModules(ME.projects).findIndex(x=>x.id===mid)===resolveModules(ME.projects).length-1); }
+  /* GROKBOT FIX: was m.quiz.every(...) using the base module's quiz, which throws if a curriculum override supplies a quiz for a module whose base has none (m.quiz undefined). Use the effective quiz (getModuleQuiz) and guard for length. */
+  const effQuiz=getModuleQuiz(mid);
+  if(btn && effQuiz.length && effQuiz.every((q,i)=>MOD_QZ.answers[i]!==undefined)){ btn.disabled=false; btn.onclick=()=>completeModule(mid, resolveModules(ME.projects).findIndex(x=>x.id===mid)===resolveModules(ME.projects).length-1); }
 }
 /* Reset quiz for current module — only callable after all questions answered */
 function resetQuiz(mid){
@@ -3422,7 +3425,7 @@ function recipientsForRule(rule){
   return COHORT.filter(m=>{
     if(!matchesRuleFilters(m,rule)) return false;
     if(rule.trigger==='completion') return m.status==='certified';
-    if(rule.trigger==='proj_completion') return m.projects.some(p=>certStatusFor_email(m.email,p)==='certified');
+    if(rule.trigger==='proj_completion') return m.projects.some(p=>certStatusForEmail(m.email,p)==='certified'); // GROKBOT FIX: was certStatusFor_email (undefined) — threw ReferenceError and crashed the Notifications view whenever a proj_completion rule was evaluated against a moderator with assigned projects. Correct function name is certStatusForEmail.
     if(rule.trigger==='milestone_50'){const pct=progressFor(m.email).pct;return pct>=50&&pct<100;}
     if(rule.trigger==='milestone_75'){const pct=progressFor(m.email).pct;return pct>=75&&pct<100;}
     if(rule.trigger==='first_module'){return progressFor(m.email).doneIds.size>=1;}
